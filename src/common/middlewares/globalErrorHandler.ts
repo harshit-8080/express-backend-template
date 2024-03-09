@@ -2,38 +2,42 @@ import { HttpError } from "http-errors";
 import { v4 as uuidv4 } from "uuid";
 import { NextFunction, Request, Response } from "express";
 import logger from "../../config/logger";
+import config from "config";
 
 export const globalErrorHandler = (
-    err: HttpError,
+    error: HttpError,
     req: Request,
     res: Response,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     next: NextFunction,
 ) => {
     const errorId = uuidv4();
-
-    const statusCode = err.status || 500;
-    const isProduction = process.env.NODE_ENV === "production";
-    const message = isProduction
-        ? `An unexpected error occurred.`
-        : err.message;
-
-    logger.error(err.message, {
-        id: errorId,
-        error: err.stack,
-        path: req.path,
-        method: req.method,
+    logger.error(error.message, error, {
+        url: req.url,
+        payload: req.body,
+        errorId: errorId,
     });
 
-    res.status(statusCode).json({
+    const statusCode = error.status || 500;
+    const isProduction = config.get("server.env") === "production";
+    const message = isProduction
+        ? `An unexpected error occurred.`
+        : error.message;
+
+    const errorStack =
+        typeof error.stack === "string" ? error.stack.split("\n") : error.stack;
+
+    return res.status(statusCode).json({
         errors: [
             {
                 ref: errorId,
-                type: err.name,
-                msg: message,
+                success: false,
+                error: true,
+                type: error.name,
+                message: message,
                 path: req.path,
                 location: "server",
-                stack: isProduction ? null : err.stack,
+                stack: isProduction ? null : errorStack,
             },
         ],
     });
